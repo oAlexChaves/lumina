@@ -4,12 +4,10 @@ import React, { useState } from "react";
 import * as pdfjsLib from "pdfjs-dist/webpack";
 
 const Lumina = () => {
-  // Estado para armazenar as mensagens
   const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState(""); // Para controlar o input
   const [pdfJson, setPdfJson] = useState(null); // Estado para armazenar o JSON do PDF
 
-  // Função para enviar a mensagem
   const handleSendMessage = () => {
     if (message.trim()) {
       setMessages([...messages, { text: message, sender: "user" }]);
@@ -17,46 +15,72 @@ const Lumina = () => {
     }
   };
 
-  // Função para processar o arquivo PDF
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
     if (file && file.type === "application/pdf") {
       const reader = new FileReader();
       reader.onload = () => {
         const pdfData = new Uint8Array(reader.result);
+        console.log("Arquivo PDF carregado com sucesso.");
+        console.log("Nome do arquivo:", file.name); // Log para verificar o nome do arquivo
+
         // Lê o PDF com o pdf.js
-        pdfjsLib.getDocument(pdfData).promise.then((pdf) => {
-          let pdfTextContent = "";
-          const numPages = pdf.numPages;
-          let pagePromises = [];
+        pdfjsLib.getDocument(pdfData).promise
+          .then((pdf) => {
+            console.log("PDF carregado com sucesso.");
+            const numPages = pdf.numPages;
+            console.log(`Número de páginas do PDF: ${numPages}`); // Log para verificar número de páginas
+            
+            let pdfTextContent = "";
+            let pagePromises = [];
+            
+            for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+              pagePromises.push(
+                pdf.getPage(pageNum).then((page) => {
+                  console.log(`Processando a página ${pageNum}...`); // Log para indicar a página sendo processada
+                  return page.getTextContent().then((textContent) => {
+                    const pageText = textContent.items.map(item => item.str).join(" ");
+                    // Verificando se o texto foi extraído corretamente
+                    if (pageText) {
+                      console.log(`Texto extraído da página ${pageNum}:`, pageText);
+                      pdfTextContent += pageText + "\n"; // Adiciona o texto da página ao conteúdo total
+                    } else {
+                      console.log(`Nenhum texto extraído na página ${pageNum}.`);
+                    }
+                  }).catch(err => {
+                    console.error(`Erro ao obter o conteúdo da página ${pageNum}:`, err);
+                  });
+                }).catch(err => {
+                  console.error(`Erro ao acessar a página ${pageNum}:`, err);
+                })
+              );
+            }
 
-          for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-            pagePromises.push(
-              pdf.getPage(pageNum).then((page) => {
-                return page.getTextContent().then((textContent) => {
-                  pdfTextContent += textContent.items.map(item => item.str).join(" ") + "\n";
-                });
-              })
-            );
-          }
+            Promise.all(pagePromises).then(() => {
+              const pdfDataJson = {
+                filename: file.name,
+                numPages: numPages,
+                textContent: pdfTextContent,
+              };
 
-          Promise.all(pagePromises).then(() => {
-            // Cria o objeto JSON
-            const pdfDataJson = {
-              filename: file.name,
-              numPages: numPages,
-              textContent: pdfTextContent,
-            };
+              setPdfJson(pdfDataJson); // Armazena o JSON no estado
 
-            setPdfJson(pdfDataJson); // Armazena o JSON no estado
-            // Exibe o JSON no console
-            console.log("PDF em formato JSON:", JSON.stringify(pdfDataJson, null, 2));
-            // Adiciona uma mensagem indicando que o PDF foi processado
-            setMessages([...messages, { text: "Arquivo PDF processado.", sender: "system" }]);
+              // Exibe as informações do arquivo no console
+              console.log("Informações do PDF:");
+              console.log("Nome do arquivo:", pdfDataJson.filename);
+              console.log("Número de páginas:", pdfDataJson.numPages);
+              console.log("Conteúdo extraído do PDF:", pdfTextContent); // Exibe o texto extraído
+
+              // Exibe o JSON completo do PDF
+              console.log("PDF em formato JSON:", JSON.stringify(pdfDataJson, null, 2));
+
+              // Adiciona uma mensagem indicando que o PDF foi processado, agora como uma mensagem recebida
+              setMessages([...messages, { text: `Arquivo PDF "${file.name}" foi lido com sucesso!`, sender: "received" }]);
+            });
+          })
+          .catch((error) => {
+            console.error("Erro ao ler o PDF: ", error);
           });
-        }).catch((error) => {
-          console.error("Erro ao ler o PDF: ", error);
-        });
       };
       reader.readAsArrayBuffer(file);
     } else {
@@ -68,7 +92,6 @@ const Lumina = () => {
     <div style={styles.container}>
       <div style={styles.title}>Lumina</div>
 
-      {/* Exibe as mensagens no chat */}
       <div style={styles.chatContainer}>
         {messages.map((msg, index) => (
           <div
@@ -83,7 +106,6 @@ const Lumina = () => {
         ))}
       </div>
 
-      {/* Container do input e botão */}
       <div style={styles.inputContainer}>
         <input
           type="text"
@@ -97,7 +119,6 @@ const Lumina = () => {
         </button>
       </div>
 
-      {/* Input para carregar arquivos PDF */}
       <input
         type="file"
         accept="application/pdf"
@@ -108,7 +129,6 @@ const Lumina = () => {
   );
 };
 
-// Estilos em formato de objeto JS
 const styles = {
   container: {
     display: "flex",
@@ -144,12 +164,12 @@ const styles = {
     wordWrap: "break-word",
   },
   userMessage: {
-    backgroundColor: "#4CAF50", // Cor para a mensagem do usuário
+    backgroundColor: "#4CAF50",
     alignSelf: "flex-end",
     color: "#fff",
   },
   receivedMessage: {
-    backgroundColor: "#333", // Cor para a mensagem recebida
+    backgroundColor: "#333",
     alignSelf: "flex-start",
     color: "#fff",
   },
@@ -194,11 +214,6 @@ const styles = {
     borderRadius: "10px",
     cursor: "pointer",
   },
-};
-
-// Adiciona o efeito hover diretamente no botão
-styles.button[":hover"] = {
-  backgroundColor: "#555",
 };
 
 export default Lumina;
